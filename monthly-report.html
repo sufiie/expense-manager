@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .form-row-inline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap; /* Ensures responsiveness */
+            margin-bottom: 15px;
+        }
+
+        .form-row-inline button,
+        .form-row-inline select,
+        .form-row-inline input {
+            min-width: 120px; /* Ensure uniform button and input sizes */
+            padding: 5px;
+            font-size: 14px;
+        }
+
+        .form-row-inline h2 {
+            margin: 0;
+            flex-grow: 1; /* Pushes the currency selector to the end */
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        table {
+            margin-top: 15px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reports</h1>
+        <div class="form-row-inline">
+            <button id="home-button" class="form-button">Home</button>
+            <button id="save-report" class="form-button">Save Report</button>
+            <label for="report-type-selector">Report Type:</label>
+            <select id="report-type-selector">
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual</option>
+            </select>
+            <div id="monthly-inputs">
+                <label for="month-selector">Month:</label>
+                <input type="month" id="month-selector" required>
+            </div>
+            <div id="annual-inputs" style="display: none;">
+                <label for="year-input">Year:</label>
+                <input type="number" id="year-input" min="2000" max="2100" placeholder="YYYY" required>
+            </div>
+        </div>
+        <div class="total-row">
+            <h2 id="total-amount">Total Amount: 0</h2>
+            <div>
+                <label for="currency-selector" style="margin-right: 5px;">Currency:</label>
+                <select id="currency-selector">
+                    <option value="INR">INR</option>
+                    <option value="OMR">OMR</option>
+                    <option value="AED">AED</option>
+                </select>
+            </div>
+        </div>
+        <table id="report-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+    <script>
+        const reportTypeSelector = document.getElementById('report-type-selector');
+        const monthSelector = document.getElementById('month-selector');
+        const yearInput = document.getElementById('year-input');
+        const monthlyInputs = document.getElementById('monthly-inputs');
+        const annualInputs = document.getElementById('annual-inputs');
+        const reportTable = document.getElementById('report-table').getElementsByTagName('tbody')[0];
+        const totalAmountElement = document.getElementById('total-amount');
+        const currencySelector = document.getElementById('currency-selector');
+        const homeButton = document.getElementById('home-button');
+        const saveReportButton = document.getElementById('save-report');
+
+        let currentCurrency = currencySelector.value;
+
+        // Redirect to home page
+        homeButton.addEventListener('click', function () {
+            window.location.href = 'index.html';
+        });
+
+        // Toggle inputs based on report type selection
+        reportTypeSelector.addEventListener('change', function () {
+            if (reportTypeSelector.value === 'monthly') {
+                monthlyInputs.style.display = 'inline-block';
+                annualInputs.style.display = 'none';
+            } else if (reportTypeSelector.value === 'annual') {
+                monthlyInputs.style.display = 'none';
+                annualInputs.style.display = 'inline-block';
+            }
+        });
+
+        // Update report table and total amount based on filters
+        function updateReportTable(filteredExpenses) {
+            reportTable.innerHTML = '';
+
+            if (filteredExpenses.length === 0) {
+                alert('No expenses found for the selected period.');
+                totalAmountElement.textContent = 'Total Amount: 0';
+                return;
+            }
+
+            filteredExpenses.sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+
+            let totalAmount = 0;
+            filteredExpenses.forEach(expense => {
+                const row = reportTable.insertRow();
+                Object.values(expense).forEach(value => {
+                    const cell = row.insertCell();
+                    cell.textContent = value;
+                });
+                totalAmount += parseFloat(expense.amount);
+            });
+
+            totalAmountElement.textContent = `Total Amount: ${totalAmount} ${currentCurrency}`;
+        }
+
+        // Filter and display monthly report
+        monthSelector.addEventListener('change', function () {
+            if (!monthSelector.value) {
+                alert('Please select a month.');
+                return;
+            }
+
+            const selectedMonth = monthSelector.value;
+            const savedExpenses = JSON.parse(localStorage.getItem('expenses')) || [];
+            const filteredExpenses = savedExpenses.filter(expense => {
+                const [month, year] = [selectedMonth.split('-')[1], selectedMonth.split('-')[0]];
+                const expenseDate = new Date(expense.date.split('-').reverse().join('-'));
+                return (
+                    expense.currency === currentCurrency &&
+                    expenseDate.getFullYear() === parseInt(year) &&
+                    (expenseDate.getMonth() + 1) === parseInt(month)
+                );
+            });
+
+            updateReportTable(filteredExpenses);
+        });
+
+        // Filter and display annual report
+        yearInput.addEventListener('change', function () {
+            if (!yearInput.value) {
+                alert('Please enter a year.');
+                return;
+            }
+
+            const selectedYear = parseInt(yearInput.value);
+            const savedExpenses = JSON.parse(localStorage.getItem('expenses')) || [];
+            const filteredExpenses = savedExpenses.filter(expense => {
+                const expenseDate = new Date(expense.date.split('-').reverse().join('-'));
+                return (
+                    expense.currency === currentCurrency &&
+                    expenseDate.getFullYear() === selectedYear
+                );
+            });
+
+            updateReportTable(filteredExpenses);
+        });
+
+        // Handle currency change
+        currencySelector.addEventListener('change', function () {
+            currentCurrency = currencySelector.value;
+            const selectedReportType = reportTypeSelector.value;
+
+            if (selectedReportType === 'monthly' && monthSelector.value) {
+                monthSelector.dispatchEvent(new Event('change'));
+            } else if (selectedReportType === 'annual' && yearInput.value) {
+                yearInput.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Save report as PDF with Summary Heading
+        saveReportButton.addEventListener('click', function () {
+            const tableHtml = document.getElementById('report-table').outerHTML;
+            const totalAmount = totalAmountElement.textContent.replace('Total Amount: ', '');
+            const reportType = reportTypeSelector.value === 'monthly' ? 'Monthly' : 'Annual';
+            const period = reportType === 'Monthly' ? monthSelector.value : yearInput.value;
+            const summaryHeading = `<h1>${reportType} Report - ${period}</h1>`;
+            const totalAmountHtml = `<h2>Total Amount: ${totalAmount}</h2>`;
+
+            const style = `
+                <style>
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f4f4f4; }
+                </style>
+            `;
+            const win = window.open('', '', 'height=700,width=700');
+            win.document.write('<html><head>');
+            win.document.write('<title>Reports</title>');
+            win.document.write(style);
+            win.document.write('</head><body>');
+            win.document.write(summaryHeading);
+            win.document.write(totalAmountHtml);
+            win.document.write(tableHtml);
+            win.document.write('</body></html>');
+            win.document.close();
+            win.print();
+        });
+    </script>
+</body>
+</html>
