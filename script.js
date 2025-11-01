@@ -14,10 +14,13 @@ let savedExpenses = JSON.parse(localStorage.getItem('expenses')) || [];
 let currentCurrency = localStorage.getItem('currentCurrency') || currencySelector.value;
 currencySelector.value = currentCurrency;
  
+// --- REVISED FUNCTION: updateExpenseTable() ---
 // Update the expense table with sorted entries
 function updateExpenseTable() {
 expenseTable.innerHTML = '';
 const selectedCategory = filterCategory.value;
+
+// Filter expenses by currency and category
 const filteredExpenses = savedExpenses.filter(expense => {
 return (
 expense.currency === currentCurrency &&
@@ -30,26 +33,38 @@ filteredExpenses.sort((a, b) => {
 const dateA = new Date(a.date.split('-').reverse().join('-'));
 const dateB = new Date(b.date.split('-').reverse().join('-'));
 if (dateA.getTime() === dateB.getTime()) {
-// Use the index in the original savedExpenses array for stable sorting on the same day
+// Fallback to original array order for same-day entries (newest last in 'savedExpenses')
 return savedExpenses.indexOf(b) - savedExpenses.indexOf(a);
 }
-return dateB - dateA;
+return dateB - dateA; // Sort by date descending
 });
  
-// NOTE: We no longer pass the unreliable 'index' from the filtered array
-filteredExpenses.forEach(expense => addExpenseRow(expense));
+// **CRITICAL CHANGE HERE:** Find the original index of the expense in savedExpenses
+filteredExpenses.forEach((expense) => {
+// Find the index of this expense object within the main, unsorted 'savedExpenses' array.
+const originalIndex = savedExpenses.findIndex(item => item === expense);
+// Pass the expense object and its true index to the row creation function.
+addExpenseRow(expense, originalIndex);
+});
 }
+// ----------------------------------------------------
  
+ 
+// --- REVISED FUNCTION: addExpenseRow() ---
 // Add a new expense row to the table
-function addExpenseRow(expense) {
+function addExpenseRow(expense, index) { // 'index' is now the ORIGINAL index in savedExpenses
 const row = expenseTable.insertRow();
-// **IMPORTANT FIX**: Store the full expense data on the row for reliable deletion
-row.expenseData = expense;
 
-// Insert cells for expense properties
+// Insert data cells
+// NOTE: Object.values(expense) must return values in the order: date, category, amount, currency, remarks
 Object.values(expense).forEach(value => {
 const cell = row.insertCell();
+// Handle number formatting if necessary (optional)
+if (typeof value === 'number') {
+cell.textContent = value.toFixed(2);
+} else {
 cell.textContent = value;
+}
 });
  
 // Add Delete button
@@ -57,29 +72,30 @@ const deleteCell = row.insertCell();
 const deleteButton = document.createElement('button');
 deleteButton.textContent = 'Delete';
 deleteButton.className = 'delete-button';
-deleteButton.addEventListener('click', function () {
-// Retrieve the data stored on the row
-const expenseToDelete = row.expenseData;
+
+// **CRITICAL CHANGE 1: Store the original array index on the button**
+deleteButton.setAttribute('data-index', index);
  
-// **CORRECTED DELETION LOGIC**: Find the item's index in the ORIGINAL savedExpenses array
-const indexToDelete = savedExpenses.findIndex(item =>
-item.date === expenseToDelete.date &&
-item.category === expenseToDelete.category &&
-item.amount === expenseToDelete.amount &&
-item.currency === expenseToDelete.currency &&
-item.remarks === expenseToDelete.remarks
-);
+// **CRITICAL CHANGE 2: Retrieve the index from the button on click**
+deleteButton.addEventListener('click', function (event) {
+// Read the stored index from the button's data attribute
+const indexToDelete = parseInt(event.currentTarget.dataset.index);
  
-if (indexToDelete > -1) {
-savedExpenses.splice(indexToDelete, 1); // Delete the correct expense
+if (!isNaN(indexToDelete)) {
+// Use the correct index to splice the original array
+savedExpenses.splice(indexToDelete, 1);
+
+// Save the updated array to localStorage
 localStorage.setItem('expenses', JSON.stringify(savedExpenses));
-updateExpenseTable(); // Re-render the table
-} else {
-console.error("Expense to delete was not found in the main expense list.");
+
+// Redraw the table (which re-filters/sorts/updates the UI)
+updateExpenseTable();
 }
 });
 deleteCell.appendChild(deleteButton);
 }
+// ----------------------------------------------------
+ 
  
 // Add new expense
 expenseForm.addEventListener('submit', function (event) {
